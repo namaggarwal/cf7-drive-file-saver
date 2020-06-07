@@ -10,8 +10,12 @@
  * License: GPL2
  */
 
+define('FS_CF7_CONNECTOR_VERSION', '1.0');
 define('FS_CF7_CONNECTOR_ROOT', dirname(__FILE__));
+define('FS_CF7_CONNECTOR_PATH', plugin_dir_path(__FILE__));
+define('FS_CF7_CONNECTOR_URL', plugins_url('/', __FILE__));
 include(FS_CF7_CONNECTOR_ROOT . '/app.php');
+include(FS_CF7_CONNECTOR_ROOT . '/connector.php');
 
 
 
@@ -20,12 +24,17 @@ class CF7_File_Saver
 
   function __construct()
   {
-
     //run on activation of plugin
     register_activation_hook(__FILE__, array($this, 'cf7_drive_file_saver_activate'));
-
     //run on uninstall
     register_uninstall_hook(__FILE__, array('CF7_File_Saver', 'cf7_drive_file_saver_uninstall'));
+    //validate if contact form 7 plugin exist
+    add_action('admin_init', array($this, 'validate_parent_plugin_exists'));
+    //register admin panel
+    add_action('admin_menu', array($this, 'register_cf7_dfs_menu_pages'));
+
+    // load the js and css files
+    add_action('init', array($this, 'load_css_and_js_files'));
 
     // add_action('wpcf7_mail_sent', array($this, 'save_to_drive'));
     // add_filter('wpcf7_posted_data', array($this, 'create_folder'));
@@ -92,6 +101,13 @@ class CF7_File_Saver
    */
   private function create_site_data()
   {
+
+    if (!get_option('cf7_dfs_client_id')) {
+      update_option('cf7_dfs_client_id', '');
+    }
+    if (!get_option('cf7_dfs_client_secret')) {
+      update_option('cf7_dfs_client_secret', '');
+    }
     if (!get_option('cf7_dfs_access_code')) {
       update_option('cf7_dfs_access_code', '');
     }
@@ -131,10 +147,40 @@ class CF7_File_Saver
 
   private static function delete_site_data()
   {
+    delete_option('cf7_dfs_client_id');
+    delete_option('cf7_dfs_client_secret');
     delete_option('cf7_dfs_access_code');
     delete_option('cf7_dfs_token');
   }
 
+
+  /**
+   * Create/Register menu items for the plugin.
+   */
+  public function register_cf7_dfs_menu_pages()
+  {
+    if (current_user_can('wpcf7_edit_contact_forms')) {
+      $current_role = Gs_Connector_Utility::instance()->get_current_user_role();
+      add_submenu_page('wpcf7', __('Drive File Saver'), __('Drive File Saver'), $current_role, 'wpcf7-dfs-admin-config', array($this, 'plugin_configuration_page'));
+    }
+  }
+
+  public function plugin_configuration_page()
+  {
+    include(FS_CF7_CONNECTOR_PATH . "pages/plugin-settings.php");
+  }
+
+  public function load_css_and_js_files()
+  {
+    add_action('admin_print_scripts', array($this, 'add_js_files'));
+  }
+
+  public function add_js_files()
+  {
+    if (is_admin() && $_GET['page'] == 'wpcf7-dfs-admin-config') {
+      wp_enqueue_script('fs-cf7-admin-js', FS_CF7_CONNECTOR_URL . 'assets/js/settings.js', [], FS_CF7_CONNECTOR_VERSION, true);
+    }
+  }
 
   private function create_folder($data)
   {
