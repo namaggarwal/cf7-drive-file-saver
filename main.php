@@ -107,11 +107,23 @@ class CF7_File_Saver
     if (!get_option('cf7_dfs_client_secret')) {
       update_option('cf7_dfs_client_secret', '');
     }
-    if (!get_option('cf7_dfs_access_code')) {
-      update_option('cf7_dfs_access_code', '');
-    }
     if (!get_option('cf7_dfs_token')) {
       update_option('cf7_dfs_token', '');
+    }
+    if (!get_option('cf7_dfs_folder_id')) {
+      update_option('cf7_dfs_folder_id', '');
+    }
+
+    if (!get_option('cf7_dfs_name_column')) {
+      update_option('cf7_dfs_name_column', '');
+    }
+
+    if (!get_option('cf7_dfs_template_id')) {
+      update_option('cf7_dfs_template_id', '');
+    }
+
+    if (!get_option('cf7_dfs_mode')) {
+      update_option('cf7_dfs_mode', '1');
     }
   }
 
@@ -148,8 +160,11 @@ class CF7_File_Saver
   {
     delete_option('cf7_dfs_client_id');
     delete_option('cf7_dfs_client_secret');
-    delete_option('cf7_dfs_access_code');
     delete_option('cf7_dfs_token');
+    delete_option('cf7_dfs_folder_id');
+    delete_option('cf7_dfs_name_column');
+    delete_option('cf7_dfs_template_id');
+    delete_option('cf7_dfs_mode');
   }
 
 
@@ -202,28 +217,39 @@ class CF7_File_Saver
     try {
       $authGoogleClient = $googleClient->getAuthenticatedGoogleClient($token);
       $this->googleService = new GoogleService($authGoogleClient);
-    }catch(Exception $e) {
-      error_log(print_r($e, true));
+    } catch (Exception $e) {
+      error_log(print_r($e->getTraceAsString(), true));
       return null;
     }
 
     return $this->googleService;
   }
 
+  private function create_drive_folder($googleService, $data)
+  {
+    $name_column = get_option('cf7_dfs_name_column');
+    $name = $data[$name_column];
+    $folderID = get_option('cf7_dfs_folder_id');
+    return $googleService->createFolder($name, $folderID);
+  }
+
   public function create_folder($data)
   {
+    $mode = get_option('cf7_dfs_mode');
+    if ($mode != '1') {
+      return;
+    }
     $googleService = $this->getGoogleService();
     if ($googleService == null) {
       return;
     }
-    $name = $data['your-name'];
-    try{
-      $folder = $googleService->createFolder($name, '1EIsW_BjWSCwpkxHo62znsiPwZRKCbLW-');
+    try {
+      $folder = $this->create_drive_folder($googleService, $data);
       if ($folder != null) {
         $data['created_folder'] = $folder->getId();
       }
-    }catch(Exception $e){
-      error_log(print_r($e, true));
+    } catch (Exception $e) {
+      error_log(print_r($e->getTraceAsString(), true));
     }
 
     return $data;
@@ -231,7 +257,12 @@ class CF7_File_Saver
 
   public function save_to_drive($form)
   {
+
     error_log("save_to_drive:start");
+
+    $templateID = get_option('cf7_dfs_template_id');
+    $nameCol = get_option('cf7_dfs_name_column');
+    $mode = get_option('cf7_dfs_mode');
 
     $submission = WPCF7_Submission::get_instance();
     if ($submission == null) {
@@ -241,29 +272,28 @@ class CF7_File_Saver
     $uploaded_files = $submission->uploaded_files();
 
     $folderID = '';
-    $name = $posted_data['your-name'];
-    try{
+    $name = $posted_data[$nameCol];
+    try {
       if (isset($posted_data['created_folder'])) {
         $folderID = $posted_data['created_folder'];
       } else {
         // create folder
-        $parentFolderID = '1EIsW_BjWSCwpkxHo62znsiPwZRKCbLW-';
         $service = $this->getGoogleService();
-        $folder = $service->createFolder($name, $parentFolderID);
+        $folder = $this->create_drive_folder($service, $posted_data);
         $folderID =  $folder->getId();
       }
-      $this->handle_posted_data($name, $folderID, $posted_data, $uploaded_files);
-    }catch(Exception $e){
-      error_log(print_r($e, true));
+      $this->handle_posted_data($name, $folderID, $templateID,$mode, $posted_data, $uploaded_files);
+    } catch (Exception $e) {
+      error_log(print_r($e->getTraceAsString(), true));
     }
 
     error_log("save_to_drive:end");
   }
 
-  private function handle_posted_data($name, $folderID, $posted_data, $uploaded_files)
+  private function handle_posted_data($name, $folderID, $templateID,$mode, $posted_data, $uploaded_files)
   {
 
-    try{
+    try {
       if (is_array($uploaded_files) && count($uploaded_files) > 0) {
         $filesContent = array();
         foreach ($uploaded_files as $uploaded_file) {
@@ -272,10 +302,13 @@ class CF7_File_Saver
         }
         $this->uploadFilesToDrive($folderID, $filesContent);
       }
-    }catch(Exception $e){
-      error_log(print_r($e, true));
+    } catch (Exception $e) {
+      error_log(print_r($e->getTraceAsString(), true));
     }
 
+    if($mode == '1'){
+      return;
+    }
 
     $data = array();
     foreach ($posted_data as $key => $value) {
@@ -291,14 +324,13 @@ class CF7_File_Saver
         }
       }
     }
-    $templateID = '1r-ieHgSMA4zOy-lVoLIB-UjHjEzMbyVbLgF75bLIB7Q';
     $this->processRow($name, $folderID, $templateID, $data);
   }
 
   private function uploadFilesToDrive($folderID, $uploadedFiles)
   {
     $service = $this->getGoogleService();
-    if($service == null) {
+    if ($service == null) {
       return;
     }
     foreach ($uploadedFiles as $fileName => $uploadedFile) {
@@ -309,7 +341,7 @@ class CF7_File_Saver
   private function processRow($name, $folderID, $templateID, $data)
   {
     $service = $this->getGoogleService();
-    if($service == null) {
+    if ($service == null) {
       return;
     }
     try {
@@ -319,7 +351,7 @@ class CF7_File_Saver
       $service->uploadFileAsPDF($name, $pdfContent, $folderID);
       $service->deleteFile($copiedFile->getId());
     } catch (Exception $e) {
-      error_log($e->message);
+      error_log($e->getTraceAsString());
     }
   }
 }

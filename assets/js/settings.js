@@ -5,6 +5,10 @@ var getGoogleCodeBtn = document.getElementById('dfs-google-get-code');
 var saveGoogleCredNonceInput = document.getElementById('cf7-dfs-cred-ajax-nonce');
 var saveGoogleTokenNonceInput = document.getElementById('cf7-dfs-google-save-ajax-nonce');
 var codeInput = document.getElementById('dfs-google-code');
+var folderInput = document.getElementById('dfs-folder-id');
+var templateInput = document.getElementById('dfs-template-id');
+var nameInput = document.getElementById('dfs-name-col');
+var modeInput = document.getElementById('dfs-mode');
 var saveGoogleTokenBtn = document.getElementById('dfs-google-save-token');
 
 function attachEvents() {
@@ -50,16 +54,24 @@ function onGetGoogleCodeClick() {
 
 function onSaveGoogleTokenClick() {
   var code = codeInput.value.trim();
-
-  if (code === '') {
-    alert('Code cannot be empty');
+  var folderID = folderInput.value.trim();
+  var templateID = templateInput.value.trim();
+  var nameCol = nameInput.value.trim();
+  var mode = modeInput.value.trim();
+  if (code === '' || folderID == '' || templateID == '' || nameCol == '' || mode == '') {
+    alert('Code/FolderID/TemplateID/Mode/Name Column cannot be empty');
     return;
   }
 
   var formData = new FormData();
   formData.append('action', 'cf7_dfs_save_google_token');
   formData.append('code', code);
+  formData.append('folderID', folderID);
+  formData.append('templateID', templateID);
+  formData.append('nameCol', nameCol);
+  formData.append('mode', mode);
   formData.append('cf7-dfs-google-save-ajax-nonce', saveGoogleTokenNonceInput.value);
+
   fetch(ajaxurl, {
     method: 'POST',
     body: formData,

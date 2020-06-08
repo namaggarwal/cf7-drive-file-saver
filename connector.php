@@ -7,8 +7,26 @@ class CF7_File_Saver_Connector
 
   public function __construct()
   {
+    // Add new tab to contact form 7 editors panel
+    add_filter('wpcf7_editor_panels', array($this, 'get_editor_panel'));
+
     add_action('wp_ajax_cf7_dfs_save_google_credentials', array($this, 'save_google_credentials'));
     add_action('wp_ajax_cf7_dfs_save_google_token', array($this, 'generate_token'));
+  }
+
+  public function get_editor_panel($panels)
+  {
+    if (current_user_can('wpcf7_edit_contact_form')) {
+      $panels['file_saver'] = array(
+        'title' => __('File Saver', 'contact-form-7'),
+        'callback' => array($this, 'cf7_file_saver_page')
+      );
+    }
+    return $panels;
+  }
+
+  public function cf7_file_saver_page() {
+    include(FS_CF7_CONNECTOR_PATH . "pages/panel-file-saver.php");
   }
 
   public function save_google_credentials()
@@ -48,6 +66,19 @@ class CF7_File_Saver_Connector
 
     $token = json_encode($token);
     update_option('cf7_dfs_token', $token);
+
+    $folderID = sanitize_text_field($_POST["folderID"]);
+    update_option('cf7_dfs_folder_id', $folderID);
+
+    $templateID = sanitize_text_field($_POST["templateID"]);
+    update_option('cf7_dfs_template_id', $templateID);
+
+    $nameCol = sanitize_text_field($_POST["nameCol"]);
+    update_option('cf7_dfs_name_column', $nameCol);
+
+    $mode = sanitize_text_field($_POST["mode"]);
+    update_option('cf7_dfs_mode', $mode);
+
     wp_send_json_success();
   }
 }
