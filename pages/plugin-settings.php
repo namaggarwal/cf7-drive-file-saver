@@ -16,11 +16,11 @@
       <div class="dfs-card-form-cont">
         <div class="dfs-card-form-input-cont">
           <label for="dfs-google-id">Google ClientID</label>
-          <input type="text" id="dfs-google-id" />
+          <input type="text" id="dfs-google-id" value="<?php echo get_option('cf7_dfs_client_id') ?>" />
         </div>
         <div class="dfs-card-form-input-cont">
           <label for="dfs-google-secret">Google ClientSecret</label>
-          <input type="text" id="dfs-google-secret" />
+          <input type="text" id="dfs-google-secret" value="<?php echo get_option('cf7_dfs_client_secret') ?>" />
         </div>
         <div class="dfs-card-form-input-cont">
           <input type="button" id="dfs-google-save" value="Save" />

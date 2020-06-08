@@ -1,32 +1,35 @@
 <?php
 
-require_once dirname( __FILE__ ).'/vendor/autoload.php';
+require_once dirname(__FILE__) . '/vendor/autoload.php';
 
 class GoogleClient
 {
 
-  private static $GOOGLE_CLIENT_ID = '';
-  private static $GOOGLE_CLIENT_SECRET = '';
   private static $GOOGLE_REDIRECT_URI = 'urn:ietf:wg:oauth:2.0:oob';
-  private static $GOOGLE_AUTH_CODE = '';
-  private static $GOOGLE_TOKEN = [
-  ];
+  private $clientID;
+  private $clientSecret;
+
+  public function __construct($clientID, $clientSecret)
+  {
+    $this->clientID = $clientID;
+    $this->clientSecret = $clientSecret;
+  }
 
   private function getGoogleClient()
   {
     $client = new Google_Client();
-    $client->setClientId(GoogleClient::$GOOGLE_CLIENT_ID);
-    $client->setClientSecret(GoogleClient::$GOOGLE_CLIENT_SECRET);
+    $client->setClientId($this->clientID);
+    $client->setClientSecret($this->clientSecret);
     $client->setRedirectUri(GoogleClient::$GOOGLE_REDIRECT_URI);
     $client->setScopes(Google_Service_Drive::DRIVE);
     $client->setAccessType('offline');
     return $client;
   }
 
-  public function getAuthenticatedGoogleClient()
+  public function getAuthenticatedGoogleClient($token)
   {
     $client = $this->getGoogleClient();
-    $client->fetchAccessTokenWithRefreshToken(GoogleClient::$GOOGLE_TOKEN['refresh_token']);
+    $client->fetchAccessTokenWithRefreshToken($token['refresh_token']);
     return $client;
   }
 
@@ -36,10 +39,10 @@ class GoogleClient
     return $client->createAuthUrl();
   }
 
-  public function getGoogleToken()
+  public function getGoogleToken($authCode)
   {
     $client = $this->getGoogleClient();
-    $client->fetchAccessTokenWithAuthCode(GoogleClient::$GOOGLE_AUTH_CODE);
+    $client->fetchAccessTokenWithAuthCode($authCode);
     $tokenData = $client->getAccessToken();
     return $tokenData;
   }
@@ -54,7 +57,7 @@ class GoogleService
     $this->client = $client;
   }
 
-  function createFolder($name, $parentId)
+  public function createFolder($name, $parentId=null)
   {
     $file = new Google_Service_Drive_DriveFile();
     $file->setName($name);
@@ -141,10 +144,3 @@ class GoogleService
     $service->files->delete($fileId);
   }
 }
-
-
-// $name = 'Naman';
-// $folderID = '1EIsW_BjWSCwpkxHo62znsiPwZRKCbLW-';
-// $templateID = '1-GaKEPji27FiIu34Ft1nVANwA53r4G7x-u6dWmzdnjE';
-
-// processRow($name, $folderID, $templateID);

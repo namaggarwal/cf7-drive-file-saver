@@ -14,13 +14,12 @@ define('FS_CF7_CONNECTOR_VERSION', '1.0');
 define('FS_CF7_CONNECTOR_ROOT', dirname(__FILE__));
 define('FS_CF7_CONNECTOR_PATH', plugin_dir_path(__FILE__));
 define('FS_CF7_CONNECTOR_URL', plugins_url('/', __FILE__));
-include(FS_CF7_CONNECTOR_ROOT . '/app.php');
-include(FS_CF7_CONNECTOR_ROOT . '/connector.php');
-
-
+include_once(FS_CF7_CONNECTOR_ROOT . '/app.php');
+include_once(FS_CF7_CONNECTOR_ROOT . '/connector.php');
 
 class CF7_File_Saver
 {
+  private $googleService;
 
   function __construct()
   {
@@ -36,8 +35,8 @@ class CF7_File_Saver
     // load the js and css files
     add_action('init', array($this, 'load_css_and_js_files'));
 
-    // add_action('wpcf7_mail_sent', array($this, 'save_to_drive'));
-    // add_filter('wpcf7_posted_data', array($this, 'create_folder'));
+    add_action('wpcf7_mail_sent', array($this, 'save_to_drive'));
+    add_filter('wpcf7_posted_data', array($this, 'create_folder'));
   }
 
   /**
@@ -182,27 +181,102 @@ class CF7_File_Saver
     }
   }
 
-  private function create_folder($data)
+  private function getGoogleService()
   {
-    $data['created_folder'] = 'sdsdjsdjhsd';
+    if ($this->googleService != null) {
+      return $this->googleService;
+    }
+
+    $clientID = get_option('cf7_dfs_client_id');
+    if ($clientID == '') {
+      return null;
+    }
+
+    $clientSecret = get_option('cf7_dfs_client_secret');
+    $googleClient = new GoogleClient($clientID, $clientSecret);
+    $token = get_option('cf7_dfs_token');
+    if ($token == '') {
+      return null;
+    }
+    $token = json_decode($token, true);
+    try {
+      $authGoogleClient = $googleClient->getAuthenticatedGoogleClient($token);
+      $this->googleService = new GoogleService($authGoogleClient);
+    }catch(Exception $e) {
+      error_log(print_r($e, true));
+      return null;
+    }
+
+    return $this->googleService;
+  }
+
+  public function create_folder($data)
+  {
+    $googleService = $this->getGoogleService();
+    if ($googleService == null) {
+      return;
+    }
+    $name = $data['your-name'];
+    try{
+      $folder = $googleService->createFolder($name, '1EIsW_BjWSCwpkxHo62znsiPwZRKCbLW-');
+      if ($folder != null) {
+        $data['created_folder'] = $folder->getId();
+      }
+    }catch(Exception $e){
+      error_log(print_r($e, true));
+    }
+
     return $data;
   }
 
-  private function save_to_drive($form)
+  public function save_to_drive($form)
   {
     error_log("save_to_drive:start");
 
     $submission = WPCF7_Submission::get_instance();
-    if ($submission) {
-      $posted_data = $submission->get_posted_data();
-      $uploaded_files = $submission->uploaded_files();
-      // handle_posted_data($posted_data, $uploaded_files);
+    if ($submission == null) {
+      return;
     }
+    $posted_data = $submission->get_posted_data();
+    $uploaded_files = $submission->uploaded_files();
+
+    $folderID = '';
+    $name = $posted_data['your-name'];
+    try{
+      if (isset($posted_data['created_folder'])) {
+        $folderID = $posted_data['created_folder'];
+      } else {
+        // create folder
+        $parentFolderID = '1EIsW_BjWSCwpkxHo62znsiPwZRKCbLW-';
+        $service = $this->getGoogleService();
+        $folder = $service->createFolder($name, $parentFolderID);
+        $folderID =  $folder->getId();
+      }
+      $this->handle_posted_data($name, $folderID, $posted_data, $uploaded_files);
+    }catch(Exception $e){
+      error_log(print_r($e, true));
+    }
+
     error_log("save_to_drive:end");
   }
 
-  private function handle_posted_data($posted_data, $uploaded_files)
+  private function handle_posted_data($name, $folderID, $posted_data, $uploaded_files)
   {
+
+    try{
+      if (is_array($uploaded_files) && count($uploaded_files) > 0) {
+        $filesContent = array();
+        foreach ($uploaded_files as $uploaded_file) {
+          $fileName = basename($uploaded_file);
+          $filesContent[$fileName] = file_get_contents($uploaded_file);
+        }
+        $this->uploadFilesToDrive($folderID, $filesContent);
+      }
+    }catch(Exception $e){
+      error_log(print_r($e, true));
+    }
+
+
     $data = array();
     foreach ($posted_data as $key => $value) {
       // exclude the default wpcf7 fields in object
@@ -217,34 +291,32 @@ class CF7_File_Saver
         }
       }
     }
-    $name = $data['your-name'];
-    $folderID = '';
-    $templateID = '';
-    $filesContent = array();
-    if (is_array($uploaded_files) && count($uploaded_files) > 0) {
-      foreach ($uploaded_files as $uploaded_file) {
-        $fileName = basename($uploaded_file);
-        $filesContent[$fileName] = file_get_contents($uploaded_file);
-      }
-    }
-    $this->processRow($name, $folderID, $templateID, $data, $filesContent);
+    $templateID = '1r-ieHgSMA4zOy-lVoLIB-UjHjEzMbyVbLgF75bLIB7Q';
+    $this->processRow($name, $folderID, $templateID, $data);
   }
 
-  private function processRow($name, $parentFolderID, $templateID, $data, $uploadedFiles)
+  private function uploadFilesToDrive($folderID, $uploadedFiles)
   {
-    try {
-      $clientObj = new GoogleClient();
-      $googleClient = $clientObj->getAuthenticatedGoogleClient();
-      $service = new GoogleService($googleClient);
+    $service = $this->getGoogleService();
+    if($service == null) {
+      return;
+    }
+    foreach ($uploadedFiles as $fileName => $uploadedFile) {
+      $service->uploadFile($fileName, $uploadedFile, $folderID);
+    }
+  }
 
-      $folder = $service->createFolder($name, $parentFolderID);
-      foreach ($uploadedFiles as $fileName => $uploadedFile) {
-        $service->uploadFile($fileName, $uploadedFile, $folder->getId());
-      }
+  private function processRow($name, $folderID, $templateID, $data)
+  {
+    $service = $this->getGoogleService();
+    if($service == null) {
+      return;
+    }
+    try {
       $copiedFile = $service->copyDocument($templateID);
       $service->updateDocument($copiedFile->getId(), $data);
       $pdfContent = $service->getFileContentAsPDF($copiedFile->getId());
-      $service->uploadFileAsPDF($name, $pdfContent, $folder->getId());
+      $service->uploadFileAsPDF($name, $pdfContent, $folderID);
       $service->deleteFile($copiedFile->getId());
     } catch (Exception $e) {
       error_log($e->message);
