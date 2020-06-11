@@ -191,7 +191,7 @@ class CF7_File_Saver
 
   public function add_js_files()
   {
-    if (is_admin() && $_GET['page'] == 'wpcf7-dfs-admin-config') {
+    if (is_admin() && isset($_GET['page']) && $_GET['page'] == 'wpcf7-dfs-admin-config') {
       wp_enqueue_script('fs-cf7-admin-js', FS_CF7_CONNECTOR_URL . 'assets/js/settings.js', [], FS_CF7_CONNECTOR_VERSION, true);
     }
   }
